@@ -1,0 +1,413 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="UTF-8">
+
+	<title>FR24 Feeder Pings Aircraft</title>
+	
+	<script src="https://code.jquery.com/jquery-3.7.1.min.js"
+			integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+			crossorigin="anonymous">
+	</script>
+	<script src="
+		https://cdn.jsdelivr.net/npm/js-cookie@3.0.5/dist/js.cookie.min.js">
+	</script>
+	
+	<script type="text/javascript">
+	
+	var receiver = { lat: 0, lon: 0} 	// lat lon height(feet) of receiver as per FR24
+	
+	//"x4a914f": 
+	//["4A914F", 59.2893, 18.1239, 305, 2275, 179, "5322", 0, "", "", 1415781759, "", "", "", 0, -640, "SCW10"]
+	//     id    lat      long     hdg  alt   gs   sqwk               lastping                   vertical     flight
+	//	   0     1        2        3    4     5     6     7   8   9   10          11  12  13  14  15    16
+
+	// column name , Pings object element name, optional cell alignment
+	const tabledata	= [ ['Callsign', 'callsign'], ['Distance<br>nm', 'distance', 'right'], 
+						['Bearing', 'bearing', 'right'], ['Altitude<br>ft', 'alt', 'right'],['VertSpeed<br>fpm', 'vertfpm', 'right'],
+						['GrndSpeed<br>kts', 'gs', 'center'], ['Heading', 'heading', 'right'],['SQWK','sqwk', 'center'], 
+						['Latitude', 'lat', 'right'], ['Longitude', 'lon', 'right'], ['ModeS', 'id']];	
+						
+	const height2colour =[		//feet, colour - direct from FR24 colour map
+		[42651,'RGB(255,0,0)'],	 [41010,'RGB(255,0,228)'], [39370,'RGB(216,0,255)'],
+		[37730,'RGB(174,0,255)'],[36089,'RGB(150,0,255)'], [34449,'RGB(120,0,255)'],
+		[32808,'RGB(96,0,255)'], [31168,'RGB(78,0,255)'],  [29528,'RGB(54,0,255)'],
+		[27887,'RGB(36,0,255)'], [26247,'RGB(18,0,255)'],  [24606,'RGB(0,0,255)'],
+		[22966,'RGB(0,30,255)'], [21325,'RGB(0,48,255)'],  [19685,'RGB(0,84,255)'],
+		[18045,'RGB(0,120,255)'],[16404,'RGB(0,150,255)'], [14764,'RGB(0,168,255)'],
+		[13123,'RGB(0,192,255)'],[11483,'RGB(0,234,255)'], [9843,'RGB(0,255,228)'],
+		[8202,'RGB(0,255,210)'], [6562,'RGB(0,255,156)'],  [4921,'RGB(0,255,144)'],
+		[3937,'RGB(0,255,54)'],  [3281,'RGB(0,255,12)'],   [2625,'RGB(30,255,0)'],
+		[1969,'RGB(66,255,0)'],	 [1312,'RGB(204,255,0)'],  [984,'RGB(240,255,0)'],
+		[656,'RGB(255,255,0)'],  [328,'RGB(255,255,0)'],   [0,'RGB(255,255,255)'],
+		[-1240,'black'], // to cater for airfields below mean sea level
+	];
+
+	class Ping {
+		constructor(base, raw) {
+			this.id = raw[0];  this.lat = raw[1];  this.log=raw[2];    this.heading = Math.round(raw[3]); 
+			this.alt = raw[4]; this.gs = raw[5];   this.sqwk = raw[6]; this.lastping = raw[10]; 
+			this.flight = raw[16]; this.vertfpm = raw[15];
+
+            if(raw[16]) {
+                this.callsign = '<a href="http://www.flightradar24.com/' + raw[16] + 
+								'/" target="_blank">' + raw[16] + '</a>';
+            } else {
+				this.callsign = 'N/A';
+			}
+			// lat / lon calculations and tidy up some data precision
+			var bd = calcBearingDist(base, [raw[1],raw[2]]);
+			this.distance = bd[1].toFixed(1);
+			this.bearing = Math.round(bd[0]);
+			
+			this.lat = raw[1].toFixed(3);
+			this.lon = raw[2].toFixed(3);
+		}
+	}
+	var locations = [];
+	
+	const formValues = new Map();	// link between the radar form and internal usage, 
+	formValues.set('range', 50);
+	formValues.set('minalt', 0);
+	formValues.set('maxalt', 0);
+	
+	function setup()
+	{
+		for (let [key, value] of formValues) {
+			if (Cookies.get(key)) {				// cookie overrides default
+				value = Cookies.get(key);
+				formValues.set(key, value);
+			}
+			document.getElementById(key).value = value;
+		}
+		readStaticLocations("http://" +location.host + "/location.txt");
+		$('#base').html('Receiver Lat: ' + receiver.lat + " Lon: " + receiver.lon);
+	}
+
+	
+	// generic support functions
+	var init = 1;
+	
+	function readStaticLocations(file) {
+	
+	// location_name, lat, lon
+
+	  $.ajax({
+		url:file,
+		async: false,
+		success: function (data){
+		  // have lines of key locations save for radar plot
+		  for (line of data.split(/\r?\n/)) {
+			if (line.length == 0 || line[0] == '#')
+				continue;
+			t = line.split(',');
+			name = t[0].trim();
+			if (name === "BASE") {		
+				receiver.lat = t[1];
+				receiver.lon = t[2];
+			} else {
+				lat = t[1];
+				lon = t[2];
+				bd = calcBearingDist([receiver.lat, receiver.lon], [lat, lon]);
+			
+				locations.push([name, [lat, lon], bd]);	
+			}
+		  }
+		}
+	  });
+	}
+	
+	function updateValue(name) {
+		formValues.set(name.id, name.value);
+		Cookies.set(name.id, name.value);
+	}
+
+	// distance / direction functions derived from Ed Williams. https://edwilliams.org/gccalc.htm
+	function d2r(deg) {
+		return ((Math.PI / 180) * deg);
+	}
+	
+	function r2d(rad) {
+		return ((180/Math.PI) * rad);
+	}
+	
+	function calcBearingDist(base, tgt)	// distance and direction from base [lat,lon]
+	{
+		lat1 = d2r(base[0]);
+		lat2 = d2r(tgt[0]);			
+		lon1 = d2r(base[1]);		// at this point W is - and E is + as per FR24
+		lon2 = d2r(tgt[1]);
+		
+		// compute bearing and distance (spherical model) 
+		with (Math){
+			d=acos(sin(lat1)*sin(lat2)+cos(lat1)*cos(lat2)*cos(lon2-lon1))
+
+			argacos=(sin(lat2)-sin(lat1)*cos(d))/(sin(d)*cos(lat1))
+			if (sin(lon1-lon2) < 0){       
+			   crs12=acosf(argacos)    
+			} else {
+			   crs12=2*PI-acosf(argacos)    
+			}
+		}
+		return [r2d(crs12), r2d(d) * 60]
+	}
+	
+	function acosf(x){ /* protect against rounding error on input argument e.g. 1.000001 */
+		return Math.acos(Math.min(1,Math.max(-1,x)))
+	}
+	
+	// radar drawing stuff
+	
+	function matchObject(e, t) {	
+		mouseX = parseInt(e.offsetX);
+		mouseY = parseInt(e.offsetY);
+
+		for (var i = 0; i < t.length; i++) {
+			var h = t[i];
+			if (Math.abs(mouseX - h.x) < 5 && Math.abs(mouseY - h.y) < 5) {
+				return h;
+			}
+		}
+		return null;
+	}
+	
+	function showTell(Ping) {
+		const canvas = document.getElementById("radar");
+		const context = canvas.getContext("2d");
+	
+		x = Ping.x - pCentX;
+		y = Ping.y - pCentY
+		txt = Ping.flight + " " + Ping.alt;
+		height = 10;
+		context.fillStyle = 'rgba(225,225,225,0.5)';
+		context.font = height +"px Arial";
+		
+		len = context.measureText(txt).width;
+
+		context.fillRect(x - 1, y - height + 1,len + 2,height);
+		context.fillStyle = "black";
+		context.fillText(txt, x, y);
+	}
+		
+	function handleClick(e) {
+		// display aircraft details in a pop up browser window 
+		e.preventDefault();
+		e.stopPropagation();
+	
+		if ((h = matchObject(e, Pings)) && h.flight) {
+			newwindow=window.open('http://www.flightradar24.com/' + h.flight,'_FR24_', 'height=500,width=500');
+			if (window.focus) {
+				newwindow.focus()
+			}
+		}
+	}
+	
+	var pCentX, pCentY;
+	
+	function radar(data, minalt, maxalt, range) {
+		const canvas = document.getElementById("radar");
+		const ctx = canvas.getContext("2d");
+
+		var curwidth = ctx.canvas.width;
+		var curheight = ctx.canvas.width; 
+		
+		const pInterval = range / 4;	// Nautical Miles radius / circular line
+		const pOffset = 25;				// pixels from edge of canvas 
+		const pRadius = Math.min(curwidth, curheight) / 2 - pOffset;
+		const pScale = pRadius/range;		//pixels per nm
+		
+		pCentX = pCentY = pRadius + pOffset;
+
+		function dot(elem, x, y) {
+			circle(elem, x, y, 2);
+		}
+
+		function circle(elem, x, y, r) {
+			elem.beginPath();
+			elem.arc(x,y,r,0,2*Math.PI);
+			elem.stroke();
+		}
+		
+		function drawScope(ctx, radius, interval) {
+			ctx.strokeStyle = "rgb(144 238 144 / 50%)";
+			dot(ctx, 0, 0); 		//center of radar plot
+			
+			// float point precision => 0.01 tolerance
+			for (r = interval ; r <= (radius + 0.01) ; r += interval) {
+				circle(ctx,0,0,r);
+				
+			}
+			// grid lines
+			ctx.strokeStyle = "rgb(144 238 144 / 25%)";
+			for (angle = 0; angle < 360 ; angle += 30) {
+				ctx.beginPath();
+				ctx.moveTo(0,0);
+				ctx.lineTo(Math.sin(d2r(angle)) * radius, Math.cos(d2r(angle)) * radius);
+				ctx.stroke();
+			}
+			ctx.font = "10px Arial";
+			ctx.fillStyle = "white";
+			d = formValues.get("range")/4;
+			for (l = d, x = -interval  ; (x + 0.01) >= -radius ; x -= interval, l +=d) {
+				ctx.fillText(l, x, 0);
+			}
+
+			ctx.font = "20px Arial";
+			ctx.fillStyle = "white";
+			ctx.fillText("N", 0 - 6, 0 - radius - 5);
+			ctx.fillText("S", 0 - 6, radius + 20);
+			ctx.fillText("W", 0 - radius - 22, 0 + 6 );
+			ctx.fillText("E", radius + 5, 0 + 6 );
+		}
+				
+		ctx.clearRect(-pCentX, -pCentY, curwidth, curheight);
+		if (init) {
+			ctx.translate(pCentX, pCentY);
+			init = 0;
+		}
+
+		drawScope(ctx, pRadius, pInterval * pScale);
+		
+		ctx.font = "10px Arial";
+		ctx.fillStyle = "white";
+		for ( l of locations) {
+			x = Math.sin(d2r(l[2][0])) * l[2][1] * pScale;
+			y = - Math.cos(d2r(l[2][0])) * l[2][1] * pScale;
+			ctx.fillText(l[0], x - ctx.measureText(l[0]).width / 2, y+5);
+		}
+		
+		for (i = 0 ; i < data.length ; i++) {
+			const t = data[i];	// Pings object
+			distance = parseFloat(t.distance);
+			if (distance > range || t.alt < minalt || (maxalt > 0 && t.alt > maxalt))
+				continue;
+				
+			for (h of height2colour) {
+				if (t.alt >= h[0])	{	// match on feet
+					ctx.strokeStyle = h[1];
+					break;
+				}
+			}				
+			// NOTE: Normal polar is on horizonal axis anti-clockwise whereas bearing is relative to north clockwise
+			x = Math.sin(d2r(t.bearing)) * distance * pScale;
+			y = - Math.cos(d2r(t.bearing)) * distance * pScale;
+			dot(ctx, x, y);
+			
+			t.x = x + pCentX;	// absolute position for mouse Pinging of hotspot
+			t.y = y + pCentY;
+			
+			showTell(t);
+
+			ctx.beginPath();
+			ctx.moveTo(x,y);	// back to centre of Ping dot
+			ctx.lineTo(x + Math.sin(d2r(t.heading)) * t.gs/60 * pScale, y - Math.cos(d2r(t.heading)) * t.gs/60 * pScale);
+			ctx.stroke();
+		}	
+	}
+	
+	function listTracked(Pings) {	// output table data of tracked aircraft
+		let tt = '<table><tr>';
+		
+		for (h of tabledata) {		// headings
+			let align = '';
+			if (h[2])
+				align = 'align="' + h[2] + '"';
+			tt += '<th valign="top" ' + align + '">'+h[0]+'</th>';
+		}
+		tt += '</tr>';
+		
+		for (t in Pings) {	
+			tt += '<tr>';
+			for (col of tabledata)
+			{
+				let align = '';
+				if (col[2])
+					align = ' align=' + col[2];
+					
+				let elem = col[1];	// get object matching column name provided
+				tt += '<td' + align +'>' + Pings[t][elem] + '</td>';
+			}
+			tt += '</tr>';
+		}
+		tt += '</table>';
+		$('#tracked').html(tt);
+	}
+	
+	var Pings = new Array();
+	
+	// RF24 functions below
+	function update_aircraft_cb(data)
+	{	
+		Pings = [];	// detected aircraft WITH position given in ping
+		
+		if (receiver.lat == 0 && receiver.lon == 0) {	// average detected aircraft positions
+			let lat_avg = lon_avg = c = 0;
+			for (let p in data) {
+				let ac = data[p];
+				if(ac[1] != "" && ac[2] != "" && Math.abs(ac[1]) > 0.001 && Math.abs(ac[2]) > 0.001) {
+					lat_avg += ac[1];
+					lon_avg += ac[2];
+					c += 1;
+				}
+			}
+			receiver.lat = (lat_avg / c).toFixed(3);
+			receiver.lon = (lon_avg / c).toFixed(3);
+			$('#base').html('Receiver Lat: ' + receiver.lat + " Lon: " + receiver.lon + " <b>ESTIMATED</b>");
+		}
+		
+		// enhance data in situ calculating distance and direction
+		for(var i in data) {
+			var ac = data[i];	// json row direct from FR24 request
+
+            if(ac[1] != "" && ac[2] != "" && Math.abs(ac[1]) > 0.001 && Math.abs(ac[2]) > 0.001) {
+				Pings.push(new Ping([receiver.lat, receiver.lon], ac));
+            } 
+		}
+		// sort aircraft found by distance from base station - closest first
+		Pings.sort(function(a, b){ return a.distance - b.distance});
+		
+		$('#time').html('Updated: ' + new Date().toUTCString());
+		$('#track').html("Tracking: " + Pings.length + " of " +  Object.keys(data).length + " aircraft detected");
+
+		// output tracked aircraft data on radar plot
+		radar(Pings, formValues.get('minalt'), formValues.get('maxalt'), formValues.get('range'));
+		
+		$("#radar").one('click', function(e) {
+			handleClick(e);
+		});
+		
+		listTracked(Pings);
+
+		window.setTimeout(update_aircraft, 5000);
+	}
+	
+	function update_aircraft() {
+		$.ajax({url:'flights.json?time=' + $.now(), dataType:'json', type:'get', data: $.now() }).done(function(data){update_aircraft_cb(data);});
+	}
+	
+	$( document ).ready(function() {
+		setup();
+		update_aircraft();
+	});
+	</script>
+	
+</head>
+<body>
+<h3>FR24 Radar Plot <a href="help.html" target="_help">help</a></h3>
+<div id="base"></div>
+<div id="time">Updated: N/A</div>
+<div id="track">Tracking: N/A</div>
+<canvas id="radar" width="500" height="500" style="background-color:grey">
+Sorry, your browser does not support canvas.
+</canvas>
+<form id="plot" method="post">
+  Max Range(nm): <input id="range"  type="text"  value="50" maxlength="3" size="4" onchange="updateValue(this)">
+  Min Alt(ft):   <input id="minalt" type="text"  value="0" maxlength="5" size="6" onchange="updateValue(this)">
+  Max Alt(ft):   <input id="maxalt" type="text"  value="0" maxlength="5" size="6" onchange="updateValue(this)">
+</form> 
+<h3>Tracked Aircraft List</h3>
+<pre id="tracked" >
+	Please wait...
+</pre>
+</body>
+</html>
