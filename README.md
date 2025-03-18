@@ -64,3 +64,20 @@ LHR,51.4680,-0.4551
 Once loaded the displayed plot should be centred on your location with the other useful places also shown, if in range.
 
 At this point use your browser to access your Raspberry Pi using `show.html` as the url.
+
+## General FlightRadar24 Problems
+If you are seeing intermittent errors whereby data is not being sent to the FR24 servers you may wish to follow the advice below.
+
+Check in the system log using **dmesg -T** to see if you are getting errors similar to:
+
+`WARN::dwc_otg_hcd_urb_dequeue:639: Timed out waiting for FSM NP transfer to complete on …….`
+
+If so take a look at (https://github.com/raspberrypi/firmware/issues/1804). The solution proposed there may help, i.e.
+
+Edit **/boot/cmdline.txt** and add the text below to the **end** of the current line in the file:
+```
+dwc_otg.fiq_enable=0 dwc_otg.fiq_fsm_enable=0
+```
+**NOTE: Do NOT create a second line!**
+
+After making the change reboot your Pi.
