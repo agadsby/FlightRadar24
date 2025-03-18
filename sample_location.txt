@@ -1,0 +1,13 @@
+# name, lat N+, lon W- as per FR24
+# first location should be the BASE location for the receiver.
+BASE,51.5281,-0.9048
+# other useful locations to show on radar
+LTN,51.8864,-0.2413
+BZZ,51.7491,-1.5811
+BHX,52.4523,-1.7435
+LHR,51.4680,-0.4551
+LCY,51.5048,0.0495
+LGW,51.1537,-0.1821
+STN,51.884,0.2413
+SOU,50.9502,-1.3540
+BRS,51.3831,-2.7172
