@@ -21,7 +21,7 @@ To change the range of the displayed plot simply update the Max Range field belo
 To filter the display based on reported altitude simply change the Min and Max Alt fields - the unit is Feet.
 
 ## Installation on a raspberry Pi
-After you have installed the FR24 software on your local Raspberry Pi. You'll need to place the downloaded **show.html** and **help.html** files into **/var/www/html/**. Make sure that these are readable by the lighthttpd process.
+After you have installed the FR24 software on your local Raspberry Pi, place the downloaded **show.html** and **help.html** files into **/var/www/html/**. Make sure that these are readable by the lighthttpd process.
 
 Modify **/etc/lighthttpd/lighthttpd.conf**:
 
@@ -61,6 +61,6 @@ LTN,51.8864,-0.2413
 LHR,51.4680,-0.4551
 ```
 
-Once loaded the displayed plot should be centred on your location with the other useful places alos shown, if in range.
+Once loaded the displayed plot should be centred on your location with the other useful places also shown, if in range.
 
-At this point use your browser to access the your Raspberry Pi using `show.html` as the url.
+At this point use your browser to access your Raspberry Pi using `show.html` as the url.
