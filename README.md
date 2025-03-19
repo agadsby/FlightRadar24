@@ -20,10 +20,10 @@ To change the range of the displayed plot simply update the Max Range field belo
 
 To filter the display based on reported altitude simply change the Min and Max Alt fields - the unit is Feet.
 
-## Installation on a raspberry Pi
-After you have installed the FR24 software on your local Raspberry Pi, place the downloaded **show.html** and **help.html** files into **/var/www/html/**. Make sure that these are readable by the lighthttpd process.
+## Installation on a Raspberry Pi
+After you have installed the FR24 software on your Raspberry Pi, place the downloaded **show.html** and **help.html** files into **/var/www/html/**. Make sure that these are readable by the **lighttpd** process running as **www-data**.
 
-Modify **/etc/lighthttpd/lighthttpd.conf**:
+Modify **/etc/lighttpd/lighttpd.conf**:
 
 At the end of the file add:
 ```
@@ -32,12 +32,12 @@ server.modules += (
 		"mod_proxy",
 	) 
 
-proxy.server = ( "flights.json" =>
+proxy.server = 	( "flights.json" =>
                        ( (
                            "host" => "localhost",
                            "port" => 8754
                          ) )
-                     )
+		)
 ```
 Restart the service using:
 
@@ -51,7 +51,7 @@ To correctly locate the receiver create a file called **location.txt** in the sa
 
 **NOTE: longitude is negative for locations WEST of Greenwich** 
 
-The example below is for a receiver located West of London at Latitude 51.5281 \(Northern hemisphere\)and Longitude -0.9048 \(West of the Greenwich meridian\). In addition it also includes some local airports that are to be displayed on the plot (LTN being Luton and LHR being Heathrow)
+The example below is for a receiver located West of London at Latitude 51.5281 \(Northern hemisphere\)and Longitude -0.9048 \(West of the Greenwich meridian\). This can also included named local airports, or other feature, that are to be displayed on the plot, e.g. LTN = London Luton Airport  and LHR = London Heathrow Airport)
 ```
 # name, lat N+, lon W- as per FR24
 # first location should be the BASE location for the receiver.
