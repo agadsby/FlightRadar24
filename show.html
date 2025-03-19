@@ -64,7 +64,17 @@
 			this.lon = raw[2].toFixed(3);
 		}
 	}
-	var locations = [];
+	var locations = [];	// static array of fixed locations to show on Plot
+	var hotspots = [];	// clickable entities on plot
+	
+	class Hotspot {
+		constructor(name, x, y, link) {
+			this.name = name;
+			this.x = x;
+			this.y = y;
+			this.link = link;
+		}
+	}
 	
 	const formValues = new Map();	// link between the radar form and internal usage, 
 	formValues.set('range', 50);
@@ -110,7 +120,7 @@
 				lon = t[2];
 				bd = calcBearingDist([receiver.lat, receiver.lon], [lat, lon]);
 			
-				locations.push([name, [lat, lon], bd]);	
+				locations.push([name, [lat, lon], bd, "http://www.flightradar24.com/airport/" + name]);	
 			}
 		  }
 		}
@@ -158,25 +168,22 @@
 	
 	// radar drawing stuff
 	
-	function matchObject(e, t) {	
+	function matchObject(e, hs) {	
 		mouseX = parseInt(e.offsetX);
 		mouseY = parseInt(e.offsetY);
 
-		for (var i = 0; i < t.length; i++) {
-			var h = t[i];
-			if (Math.abs(mouseX - h.x) < 5 && Math.abs(mouseY - h.y) < 5) {
-				return h;
+		for (hit of hs) {
+			if (Math.abs(mouseX - hit.x) < 5 && Math.abs(mouseY - hit.y) < 5) {
+				return hit;
 			}
 		}
 		return null;
 	}
 	
-	function showTell(Ping) {
+	function showTell(Ping, x, y) {
 		const canvas = document.getElementById("radar");
 		const context = canvas.getContext("2d");
-	
-		x = Ping.x - pCentX;
-		y = Ping.y - pCentY
+
 		txt = Ping.flight + " " + Ping.alt;
 		height = 10;
 		context.fillStyle = 'rgba(225,225,225,0.5)';
@@ -194,8 +201,8 @@
 		e.preventDefault();
 		e.stopPropagation();
 	
-		if ((h = matchObject(e, Pings)) && h.flight) {
-			newwindow=window.open('http://www.flightradar24.com/' + h.flight,'_FR24_', 'height=500,width=500');
+		if ((h = matchObject(e, hotspots)) && h.link) {
+			newwindow=window.open(h.link,'_FR24_', 'height=500,width=500');
 			if (window.focus) {
 				newwindow.focus()
 			}
@@ -265,7 +272,7 @@
 			ctx.translate(pCentX, pCentY);
 			init = 0;
 		}
-
+		hotspots = [];
 		drawScope(ctx, pRadius, pInterval * pScale);
 		
 		ctx.font = "10px Arial";
@@ -273,7 +280,10 @@
 		for ( l of locations) {
 			x = Math.sin(d2r(l[2][0])) * l[2][1] * pScale;
 			y = - Math.cos(d2r(l[2][0])) * l[2][1] * pScale;
-			ctx.fillText(l[0], x - ctx.measureText(l[0]).width / 2, y+5);
+			ctx.fillText(l[0], x + 4, y - 4);
+			ctx.strokeStyle = "red";
+			dot(ctx, x, y);
+			hotspots.push( new Hotspot(l[0],x + pCentX, y + pCentY, l[3]));	
 		}
 		
 		for (i = 0 ; i < data.length ; i++) {
@@ -293,10 +303,9 @@
 			y = - Math.cos(d2r(t.bearing)) * distance * pScale;
 			dot(ctx, x, y);
 			
-			t.x = x + pCentX;	// absolute position for mouse Pinging of hotspot
-			t.y = y + pCentY;
+			hotspots.push( new Hotspot(t.flight,x + pCentX, y + pCentY, "http://www.flightradar24.com/" + t.flight));
 			
-			showTell(t);
+			showTell(t, x, y);
 
 			ctx.beginPath();
 			ctx.moveTo(x,y);	// back to centre of Ping dot
