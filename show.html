@@ -209,8 +209,6 @@
 		}
 	}
 	
-	var pCentX, pCentY;
-	
 	function radar(data, minalt, maxalt, range) {
 		const canvas = document.getElementById("radar");
 		const ctx = canvas.getContext("2d");
@@ -219,10 +217,11 @@
 		var curheight = ctx.canvas.width; 
 		
 		const pInterval = range / 4;	// Nautical Miles radius / circular line
-		const pOffset = 25;				// pixels from edge of canvas 
+		const pOffset = 25;		// pixels from edge of canvas 
 		const pRadius = Math.min(curwidth, curheight) / 2 - pOffset;
-		const pScale = pRadius/range;		//pixels per nm
-		
+		const pScale = pRadius/range;	//pixels per nm	
+		var pCentX, pCentY;		// absolute position of centre of radar plot
+			
 		pCentX = pCentY = pRadius + pOffset;
 
 		function dot(elem, x, y) {
