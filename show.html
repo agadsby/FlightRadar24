@@ -71,7 +71,6 @@
 		}
 	}	
 	class Hotspots {
-		#mouseX; #mouseY; #s;
 		
 		constructor() {
 			this.init();
@@ -86,12 +85,12 @@
 		}
 		
 		match(e) {	
-			this.#mouseX = parseInt(e.offsetX);
-			this.#mouseY = parseInt(e.offsetY);
+			var mouseX = parseInt(e.offsetX);
+			var mouseY = parseInt(e.offsetY);
 
-			for (this.#s of this.list) {
-				if (Math.abs(this.#mouseX - this.#s.x) < 5 && Math.abs(this.#mouseY - this.#s.y) < 5) {
-					return this.#s;
+			for (var obj of this.list) {
+				if (Math.abs(mouseX - obj.x) < 5 && Math.abs(mouseY - obj.y) < 5) {
+					return obj;
 				}
 			}
 			return null;
