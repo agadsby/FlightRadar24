@@ -15,8 +15,6 @@
 	
 	<script type="text/javascript">
 	
-	var receiver = { lat: 0, lon: 0} 	// lat lon height(feet) of receiver as per FR24
-	
 	//"x4a914f": 
 	//["4A914F", 59.2893, 18.1239, 305, 2275, 179, "5322", 0, "", "", 1415781759, "", "", "", 0, -640, "SCW10"]
 	//     id    lat      long     hdg  alt   gs   sqwk               lastping                   vertical     flight
@@ -64,9 +62,6 @@
 			this.lon = raw[2].toFixed(3);
 		}
 	}
-	var locations = [];	// static array of fixed locations to show on Plot
-	var hotspots = [];	// clickable entities on plot
-	
 	class Hotspot {
 		constructor(name, x, y, link) {
 			this.name = name;
@@ -74,14 +69,37 @@
 			this.y = y;
 			this.link = link;
 		}
+	}	
+	class Hotspots {
+		#mouseX; #mouseY; #s;
+		
+		constructor() {
+			this.init();
+		}
+		
+		init() {
+			this.list = [];
+		}
+		
+		add(name, x, y, link) {
+			this.list.push(new Hotspot(name, x,y, link));
+		}
+		
+		match(e) {	
+			this.#mouseX = parseInt(e.offsetX);
+			this.#mouseY = parseInt(e.offsetY);
+
+			for (this.#s of this.list) {
+				if (Math.abs(this.#mouseX - this.#s.x) < 5 && Math.abs(this.#mouseY - this.#s.y) < 5) {
+					return this.#s;
+				}
+			}
+			return null;
+		}
+	
 	}
 	
-	const formValues = new Map();	// link between the radar form and internal usage, 
-	formValues.set('range', 50);
-	formValues.set('minalt', 0);
-	formValues.set('maxalt', 0);
-	
-	function setup()
+	function setupForm()
 	{
 		for (let [key, value] of formValues) {
 			if (Cookies.get(key)) {				// cookie overrides default
@@ -90,16 +108,15 @@
 			}
 			document.getElementById(key).value = value;
 		}
-		readStaticLocations("http://" +location.host + "/location.txt");
-		$('#base').html('Receiver Lat: ' + receiver.lat + " Lon: " + receiver.lon);
 	}
-
+	
+	function updateValue(name) {
+		formValues.set(name.id, name.value);
+		Cookies.set(name.id, name.value);
+	}
 	
 	// generic support functions
-	var init = 1;
-	
 	function readStaticLocations(file) {
-	
 	// location_name, lat, lon
 
 	  $.ajax({
@@ -125,11 +142,6 @@
 		  }
 		}
 	  });
-	}
-	
-	function updateValue(name) {
-		formValues.set(name.id, name.value);
-		Cookies.set(name.id, name.value);
 	}
 
 	// distance / direction functions derived from Ed Williams. https://edwilliams.org/gccalc.htm
@@ -167,19 +179,7 @@
 	}
 	
 	// radar drawing stuff
-	
-	function matchObject(e, hs) {	
-		mouseX = parseInt(e.offsetX);
-		mouseY = parseInt(e.offsetY);
 
-		for (hit of hs) {
-			if (Math.abs(mouseX - hit.x) < 5 && Math.abs(mouseY - hit.y) < 5) {
-				return hit;
-			}
-		}
-		return null;
-	}
-	
 	function showTell(Ping, x, y) {
 		const canvas = document.getElementById("radar");
 		const context = canvas.getContext("2d");
@@ -201,7 +201,7 @@
 		e.preventDefault();
 		e.stopPropagation();
 	
-		if ((h = matchObject(e, hotspots)) && h.link) {
+		if ((h = clickable.match(e)) && h.link) {
 			newwindow=window.open(h.link,'_FR24_', 'height=500,width=500');
 			if (window.focus) {
 				newwindow.focus()
@@ -217,11 +217,11 @@
 		var curheight = ctx.canvas.width; 
 		
 		const pInterval = range / 4;	// Nautical Miles radius / circular line
-		const pOffset = 25;		// pixels from edge of canvas 
+		const pOffset = 25;				// pixels from edge of canvas 
 		const pRadius = Math.min(curwidth, curheight) / 2 - pOffset;
-		const pScale = pRadius/range;	//pixels per nm	
-		var pCentX, pCentY;		// absolute position of centre of radar plot
-			
+		const pScale = pRadius/range;		//pixels per nm
+		var pCentX, pCentY;
+		
 		pCentX = pCentY = pRadius + pOffset;
 
 		function dot(elem, x, y) {
@@ -271,7 +271,8 @@
 			ctx.translate(pCentX, pCentY);
 			init = 0;
 		}
-		hotspots = [];
+		clickable.init();		// new scan so new points generated
+		
 		drawScope(ctx, pRadius, pInterval * pScale);
 		
 		ctx.font = "10px Arial";
@@ -282,7 +283,7 @@
 			ctx.fillText(l[0], x + 4, y - 4);
 			ctx.strokeStyle = "red";
 			dot(ctx, x, y);
-			hotspots.push( new Hotspot(l[0],x + pCentX, y + pCentY, l[3]));	
+			clickable.add(l[0],x + pCentX, y + pCentY, l[3]);	
 		}
 		
 		for (i = 0 ; i < data.length ; i++) {
@@ -302,7 +303,7 @@
 			y = - Math.cos(d2r(t.bearing)) * distance * pScale;
 			dot(ctx, x, y);
 			
-			hotspots.push( new Hotspot(t.flight,x + pCentX, y + pCentY, "http://www.flightradar24.com/" + t.flight));
+			clickable.add(t.flight,x + pCentX, y + pCentY, "http://www.flightradar24.com/" + t.flight);
 			
 			showTell(t, x, y);
 
@@ -340,8 +341,6 @@
 		tt += '</table>';
 		$('#tracked').html(tt);
 	}
-	
-	var Pings = new Array();
 	
 	// RF24 functions below
 	function update_aircraft_cb(data)
@@ -393,8 +392,24 @@
 		$.ajax({url:'flights.json?time=' + $.now(), dataType:'json', type:'get', data: $.now() }).done(function(data){update_aircraft_cb(data);});
 	}
 	
+	const formValues = new Map();	// link between the radar form and internal usage, 
+	formValues.set('range', 50);
+	formValues.set('minalt', 0);
+	formValues.set('maxalt', 0);
+	
+	var receiver = { lat: 0, lon: 0} 	// lat lon height(feet) of receiver as per FR24
+	var locations = [];	// static array of fixed locations to show on Plot
+	readStaticLocations("http://" +location.host + "/location.txt");
+
+	clickable = new Hotspots();
+	
+	var Pings = new Array();
+	
+	var init = 1;	// one off translation of convas required
+	
 	$( document ).ready(function() {
-		setup();
+		setupForm();
+		$('#base').html('Receiver Lat: ' + receiver.lat + " Lon: " + receiver.lon);
 		update_aircraft();
 	});
 	</script>
