@@ -373,7 +373,7 @@
 		Pings.sort(function(a, b){ return a.distance - b.distance});
 		
 		$('#time').html('Updated: ' + new Date().toUTCString());
-		$('#track').html("Tracking: " + Pings.length + " of " +  Object.keys(data).length + " aircraft detected");
+		$('#track').html("Positions reported by " + Pings.length + " of " +  Object.keys(data).length + " aircraft detected");
 
 		// output tracked aircraft data on radar plot
 		radar(Pings, formValues.get('minalt'), formValues.get('maxalt'), formValues.get('range'));
@@ -418,7 +418,7 @@
 <h3>FR24 Radar Plot <a href="help.html" target="_help">help</a></h3>
 <div id="base"></div>
 <div id="time">Updated: N/A</div>
-<div id="track">Tracking: N/A</div>
+<div id="track">Positions N/A</div>
 <canvas id="radar" width="500" height="500" style="background-color:grey">
 Sorry, your browser does not support canvas.
 </canvas>
