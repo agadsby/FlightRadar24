@@ -42,7 +42,7 @@
 	];
 
 	class Ping {
-		constructor(base, raw) {
+		constructor(raw) {
 			this.id = raw[0];  this.lat = raw[1];  this.log=raw[2];    this.heading = Math.round(raw[3]); 
 			this.alt = raw[4]; this.gs = raw[5];   this.sqwk = raw[6]; this.lastping = raw[10]; 
 			this.flight = raw[16]; this.vertfpm = raw[15];
@@ -54,7 +54,7 @@
 				this.callsign = 'N/A';
 			}
 			// lat / lon calculations and tidy up some data precision
-			var bd = calcBearingDist(base, [raw[1],raw[2]]);
+			var bd = calcBearingDist([receiver.lat, receiver.lon], [raw[1],raw[2]]);
 			this.distance = bd[1].toFixed(1);
 			this.bearing = Math.round(bd[0]);
 			
@@ -366,7 +366,7 @@
 			var ac = data[i];	// json row direct from FR24 request
 
             if(ac[1] != "" && ac[2] != "" && Math.abs(ac[1]) > 0.001 && Math.abs(ac[2]) > 0.001) {
-				Pings.push(new Ping([receiver.lat, receiver.lon], ac));
+				Pings.push(new Ping(ac));
             } 
 		}
 		// sort aircraft found by distance from base station - closest first
