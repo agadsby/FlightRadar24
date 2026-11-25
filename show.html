@@ -119,7 +119,8 @@
 	// location_name, lat, lon
 
 	  $.ajax({
-		url:file,
+		url: file,
+		cache: false,
 		async: false,
 		success: function (data){
 		  // have lines of key locations save for radar plot
